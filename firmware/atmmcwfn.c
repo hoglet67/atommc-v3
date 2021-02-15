@@ -111,7 +111,8 @@ void GetWildcard(void)
 	else
 	{
 		// No wildcard, show all files
-		strcpypgm2ram((char*)&WildPattern[0], (const rom far char*)"*");
+      WildPattern[0] = '*';
+      WildPattern[1] = 0;
 	}
 	
 	//log0("GetWildcard() globalData=%s WildPattern=%s\n",(const char*)globalData,WildPattern); 
@@ -463,12 +464,12 @@ BYTE tryOpenImage(int driveNo)
    return imginf->attribs;
 }
 
-
+static const char* BOOTDRV = "BOOTDRV.CFG";
 
 void saveDrivesImpl(void)
 {
    FIL *fil = &fildata[0];
-   strcpypgm2ram((char*)&globalData[0], (const rom far char*)"BOOTDRV.CFG");
+   strcpy((char*)&globalData[0], BOOTDRV);
    res = f_open(fil, (const XCHAR*)globalData, FA_OPEN_ALWAYS|FA_WRITE);
    if (FR_OK == res)
    {
@@ -591,8 +592,7 @@ void wfnValidateSDDOSDrives(void)
 
    // read the imgInfo structures back out of eeprom,
    // or 'BOOTDRV.CFG' if present (gets precidence)
-   strcpypgm2ram((char*)globalData, (const rom far char*)"BOOTDRV.CFG");
-
+   strcpy((char*)&globalData[0], BOOTDRV);
 
    // try to read the boot config file
    //

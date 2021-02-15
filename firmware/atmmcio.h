@@ -5,10 +5,11 @@
 
 #define LEDPINSOUT() TRISCbits.TRISC0 = 0; TRISCbits.TRISC1 = 0;
 
-#define REDLEDON() PORTCbits.RC0 = 1;
-#define REDLEDOFF() PORTCbits.RC0 = 0;
-#define GREENLEDON() PORTCbits.RC1 = 1;
-#define GREENLEDOFF() PORTCbits.RC1 = 0;
+extern void pico_led(int state);
+#define REDLEDON()
+#define REDLEDOFF()
+#define GREENLEDON() pico_led(1);
+#define GREENLEDOFF() pico_led(0);
 
 #define  V4HARDWARE
 
@@ -21,13 +22,15 @@
 #define RELEASEIRQ() TRISCbits.TRISC6 = 1;
 #endif
 
-#define ACTIVITYSTROBE(x) LATAbits.LATA5 = x;
+#define ACTIVITYSTROBE(x)
 
-#define WASWRITE TRISEbits.IBF
+extern unsigned int was_write();
+#define WASWRITE was_write()
 
-#define LatchAddressIn()		{ LatchedAddressLast=PORTA; }
-#define ReadDataPort()
-#define WriteDataPort(value)	{ LATD=value; }	
+extern unsigned int write_address();
+#define LatchAddressIn() { LatchedAddressLast=write_address(); }
+extern void ReadDataPort();
+extern void WriteDataPort(int value);
 
 extern void redSignal(char);
 

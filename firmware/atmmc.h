@@ -1,8 +1,6 @@
 #ifndef __MMC2_H
 #define __MMC2_H
 
-#include <p18cxxx.h>
-
 #define VSN_MAJ 3
 #define VSN_MIN 0
 

@@ -1,0 +1,39 @@
+/**
+ * Copyright (c) 2021 Chris Moulang
+ *
+ * SPDX-License-Identifier: BSD-3-Clause
+*/
+
+.program snoop
+
+.define public GPIO_FIRST 2
+
+// offset from GPIO_FIRST
+.define public PIN_A0 0
+.define public PIN_1MHZ 4
+.define public PIN_R_NW 5
+.define public PIN_D0 6
+.define public PIN_NB400 15
+
+.wrap_target
+    wait 0 PIN PIN_1MHZ
+    wait 0 PIN PIN_NB400 [4]
+    in PINS 16              ; latch address
+
+    wait 1 PIN PIN_1MHZ [31]   ; wait for clock
+    wait 0 PIN PIN_1MHZ 
+
+    in PINS 16 [4]             ; latch and push data
+.wrap
+
+
+% c-sdk {
+
+void snoop_program_init(PIO pio, uint sm, uint offset) {
+   pio_sm_config c = snoop_program_get_default_config(offset);
+   sm_config_set_in_pins(&c, snoop_GPIO_FIRST);
+   sm_config_set_in_shift(&c, true, true, 32);
+   pio_sm_init(pio, sm, offset, &c);
+}
+
+%}

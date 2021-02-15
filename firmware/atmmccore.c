@@ -4,7 +4,7 @@
 #include "atmmcwfn.h"
 #include "atmmcdef.h"
 #include "ff.h"
-
+#include "pico/stdlib.h"
 //#include "status.h"
 
 #include <string.h>
@@ -19,7 +19,7 @@ extern WORD globalAmount;
 extern BYTE globalDataPresent;
 extern int filenum;
 
-#define LatchedData		PORTD
+extern char LatchedData;
 
 static BYTE LatchedAddress;
 static BYTE LatchedAddressLast;
@@ -40,7 +40,7 @@ extern /*DSTATUS*/ unsigned char disk_initialize (BYTE);
 BYTE byteValueLatch;
 
 
-void at_process(void)
+void  __time_critical_func(at_process)()
 {
    unsigned char received;
    void (*worker)(void) = NULL;
@@ -83,6 +83,7 @@ void at_process(void)
 	      received &= 0xF3;
 	    }
             WriteDataPort(STATUS_BUSY);
+            //WriteDataPort(0xFF);
 			//log0("%02X\n",LatchedData);
 			
 			// Directory group, moved here 2011-05-29 PHS.
@@ -282,22 +283,24 @@ void at_process(void)
             }
             else if (received == CMD_GET_PORT_DDR) // get portb direction register
             {
-				WriteDataPort(TRISB);
+				// WriteDataPort(TRISB);
+				WriteDataPort(0);
             }
             else if (received == CMD_SET_PORT_DDR) // set portb direction register
             {
-               TRISB = byteValueLatch;
+               // TRISB = byteValueLatch;
 
-               WriteEEPROM(EE_PORTBTRIS, byteValueLatch);
+               // WriteEEPROM(EE_PORTBTRIS, byteValueLatch);
                WriteDataPort(STATUS_OK);
             }
             else if (received == CMD_READ_PORT) // read portb
             {
-               WriteDataPort(PORTB);
+               // WriteDataPort(PORTB);
+               WriteDataPort(0b00011111);
             }
             else if (received == CMD_WRITE_PORT) // write port B value
             {
-               LATB = byteValueLatch;
+               // LATB = byteValueLatch;
 
                WriteEEPROM(EE_PORTBVALU, byteValueLatch);
                WriteDataPort(STATUS_OK);
