@@ -233,6 +233,7 @@ void wfnDirectoryRead(void)
 void wfnSetCWDirectory(void)
 {
    WriteDataPort(STATUS_COMPLETE | f_chdir((const XCHAR*)globalData));
+   printf("CWD %s\n",(const XCHAR*)globalData );
 }
 
 void wfnDirectoryCreate(void)

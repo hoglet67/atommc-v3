@@ -38,14 +38,15 @@ static void blink(int count)
     for (int i = count * 2 - 1; i > 0; i--)
     {
         gpio_put(PIN_LED, i % 2);
-        busy_wait_us(100);
+        busy_wait_us(100000);
     }
     gpio_put(PIN_LED, 0);
 }
 
 void wait_reset()
 {
-    while (!gpio_get(PIN_NRST));
+    while (!gpio_get(PIN_NRST))
+        ;
 }
 
 // Setup the GPIO pins
@@ -73,24 +74,31 @@ static uint write_data;
 static uint _read_address;
 static bool _was_write;
 
-static void dump_reg(uint reg) {
-        uint address = (reg >> PIN_A0) & 0xF;
-        uint data = (reg >> (16 + PIN_D0)) & 0xFF;
-        if (!(reg & (1u << PIN_R_NW)))
-        {
-            printf("WRITE address=%x data=%x %x\n", address, data, reg);
-        }
-        else
-        {
-           printf("READ  address=%x data=%x %x\n", address, data, reg);
-        }
+static void dump_reg(uint reg)
+{
+    uint address = (reg >> PIN_A0) & 0xF;
+    uint data = (reg >> (16 + PIN_D0)) & 0xFF;
+    if (!(reg & (1u << PIN_R_NW)))
+    {
+        printf("WRITE address=%x data=%x %x\n", address, data, reg);
+    }
+    else
+    {
+        printf("READ  address=%x data=%x %x\n", address, data, reg);
+    }
 }
 
+volatile bool perform_reset = false;
 
 void __time_critical_func(process_pio)()
 {
     for (;;)
     {
+        if (perform_reset)
+        {
+            f_chdir("0:");
+            perform_reset = false;
+        }
         _was_write = false;
         // do
         // {
@@ -103,15 +111,10 @@ void __time_critical_func(process_pio)()
         }
         else
         {
-            _read_address = (reg >> PIN_A0) & 0xF;            
+            _read_address = (reg >> PIN_A0) & 0xF;
         }
-        // if (!pio_sm_is_rx_fifo_empty(pio, 0))
-        // {
-        //     dump_reg(reg);
-        //     reg = pio_sm_get_blocking(pio, 0);
-        //     dump_reg(reg);
-        // }
-        if (_was_write || _read_address != 0) {
+        if (_was_write || _read_address != 0)
+        {
             at_process();
         }
     }
@@ -153,8 +156,15 @@ void __time_critical_func(WriteDataPort)(int value)
 
 extern void snoop();
 
-void irq_handler() {
-    printf("Hello\n");
+void gpio_callback(uint gpio, uint32_t events)
+{
+    // Put the GPIO event(s) that just happened into event_str
+    // so we can print it
+    if (events & GPIO_IRQ_LEVEL_LOW)
+    {
+        blink(1);
+        perform_reset = true;
+    }
 }
 
 int main()
@@ -163,16 +173,17 @@ int main()
     bi_decl(bi_1pin_with_name(PIN_LED, "On-board LED"));
     stdio_init_all();
     sd_init_1pin();
-    sd_set_clock_divider(12 / 12);
+    sd_set_clock_divider(12 / 1);
     sd_set_wide_bus(false);
 
     initialiseIO();
-    blink(5);
 
     // pio->inte0 = PIO_IRQ0_INTE_SM0_RXNEMPTY_BITS;
     // irq_set_exclusive_handler(PIO0_IRQ_0, irq_handler);
     // irq_set_priority(PIO0_IRQ_0, 0x00);
     // irq_set_enabled(PIO0_IRQ_0, true);
+
+    gpio_set_irq_enabled_with_callback(PIN_NRST, GPIO_IRQ_LEVEL_LOW, true, &gpio_callback);
 
     printf("Acorn Atom MMC/PL8 Interface " __DATE__ " " __TIME__ "\n");
 

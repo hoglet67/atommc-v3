@@ -6,7 +6,7 @@
 
 extern void pico_led(int);
 
-volatile BYTE CardType = CT_MMC;
+volatile BYTE CardType = CT_SD1;
 
 // /*--------------------------------------------------------------------------
 
@@ -45,9 +45,19 @@ DRESULT mmc_readsector(BYTE *buff, DWORD lba)
 
 DRESULT mmc_writesector(BYTE *buff, DWORD sa)
 {
-    printf("mmc_writesector()\n");
     pico_led(1);
-    sleep_ms(1000);
+    printf("mmc_writesector %d\n", sa);
+    // TO BE DONE!!!
+    int status = sd_writeblocks_async((uint32_t *)buff, sa, 1);
+    int rc;
+    static int timeout = 10;
+    while (!sd_write_complete(&rc)) {
+        printf("Waiting for completion\n");
+        if (!--timeout) break;
+    }
+    printf("Done %d!\n", rc);
+    sleep_ms(1);
     pico_led(0);
+    return RES_OK;
 }
 
