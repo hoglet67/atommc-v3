@@ -26,26 +26,25 @@ write: // handle write, 6502 --> rp2040
     wait 0 PIN PIN_1MHZ
 
     in PINS 16              ; latch and push data
+    push noblock
     jmp main_loop [4]
 
 read: // handle read, rp2040 --> 6502 
     in PINS 16              ; latch and push the address
-    OUT NULL, 32 
-
+    push noblock
 
     wait 1 PIN PIN_1MHZ     ; wait for clock
 
-    set y,5                 ; flush the fifo
+    set y,4                 ; flush the fifo
 read_loop:
     pull noblock            ; get the next word (or x if tx FIFO empty)
     mov x, osr              ; save to x
     jmp y--, read_loop
-
                             ; osr = 0000FFxx 
     out pins, 8             ; output the value
 
                             ; osr = 000000FF 
-    out pindirs, 8 [16]      ; Set data pin directions to out
+    out pindirs, 8 [16]     ; Set data pin directions to out
 
 
     wait 0 PIN PIN_1MHZ     ; wait for clock
@@ -68,7 +67,7 @@ void test_program_init(PIO pio, uint sm, uint offset) {
    sm_config_set_jmp_pin 	(&c, GPIO_FIRST + PIN_R_NW);  	
    sm_config_set_in_pins(&c, GPIO_FIRST);
    sm_config_set_out_pins(&c, GPIO_FIRST + PIN_D0, 8);
-   sm_config_set_in_shift(&c, true, true, 32);
+   //sm_config_set_in_shift(&c, true, true, 32);
    pio_sm_init(pio, sm, offset, &c);
 }
 

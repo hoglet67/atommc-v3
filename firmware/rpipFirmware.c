@@ -20,6 +20,7 @@
 #include "ff.h"
 
 static const uint PIN_LED = 25;
+static const uint PIN_NRST = 16;
 extern void at_process();
 extern void at_initprocessor();
 
@@ -37,15 +38,21 @@ static void blink(int count)
     for (int i = count * 2 - 1; i > 0; i--)
     {
         gpio_put(PIN_LED, i % 2);
-        sleep_ms(100);
+        busy_wait_us(100);
     }
     gpio_put(PIN_LED, 0);
+}
+
+void wait_reset()
+{
+    while (!gpio_get(PIN_NRST));
 }
 
 // Setup the GPIO pins
 static void initialiseIO()
 {
     gpio_init(PIN_LED);
+    gpio_init(PIN_NRST);
     gpio_set_dir(PIN_LED, GPIO_OUT);
     for (int i = 0; i < 8; i++)
     {
@@ -66,6 +73,20 @@ static uint write_data;
 static uint _read_address;
 static bool _was_write;
 
+static void dump_reg(uint reg) {
+        uint address = (reg >> PIN_A0) & 0xF;
+        uint data = (reg >> (16 + PIN_D0)) & 0xFF;
+        if (!(reg & (1u << PIN_R_NW)))
+        {
+            printf("WRITE address=%x data=%x %x\n", address, data, reg);
+        }
+        else
+        {
+           printf("READ  address=%x data=%x %x\n", address, data, reg);
+        }
+}
+
+
 void __time_critical_func(process_pio)()
 {
     for (;;)
@@ -82,13 +103,17 @@ void __time_critical_func(process_pio)()
         }
         else
         {
-            _read_address = (reg >> PIN_A0) & 0xF;
+            _read_address = (reg >> PIN_A0) & 0xF;            
         }
-        if (!pio_sm_is_rx_fifo_empty(pio, 0))
-        {
-            printf("Too slow!\n");
+        // if (!pio_sm_is_rx_fifo_empty(pio, 0))
+        // {
+        //     dump_reg(reg);
+        //     reg = pio_sm_get_blocking(pio, 0);
+        //     dump_reg(reg);
+        // }
+        if (_was_write || _read_address != 0) {
+            at_process();
         }
-        at_process();
     }
 }
 
@@ -128,6 +153,10 @@ void __time_critical_func(WriteDataPort)(int value)
 
 extern void snoop();
 
+void irq_handler() {
+    printf("Hello\n");
+}
+
 int main()
 {
     bi_decl(bi_program_description("Acorn Atom MMC/PL8 Interface" __DATE__ " " __TIME__));
@@ -137,10 +166,13 @@ int main()
     sd_set_clock_divider(12 / 12);
     sd_set_wide_bus(false);
 
-    //test_sd_card();
-
     initialiseIO();
     blink(5);
+
+    // pio->inte0 = PIO_IRQ0_INTE_SM0_RXNEMPTY_BITS;
+    // irq_set_exclusive_handler(PIO0_IRQ_0, irq_handler);
+    // irq_set_priority(PIO0_IRQ_0, 0x00);
+    // irq_set_enabled(PIO0_IRQ_0, true);
 
     printf("Acorn Atom MMC/PL8 Interface " __DATE__ " " __TIME__ "\n");
 
@@ -150,6 +182,9 @@ int main()
     test_program_init(pio, 0, offset);
     pio_sm_set_enabled(pio, 0, true);
 
+    multicore_launch_core1(snoop);
+
+    wait_reset();
     process_pio();
 
     panic("SHOULD NOT BE HERE");
