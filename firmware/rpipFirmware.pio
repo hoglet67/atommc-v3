@@ -36,11 +36,8 @@ read: // handle read, rp2040 --> 6502
 no_push:
     wait 1 PIN PIN_1MHZ     ; wait for clock
 
-;    set y,4                 ; flush the fifo
-;read_loop:
     pull noblock            ; get the next word (or x if tx FIFO empty)
     mov x, osr              ; save to x
-;    jmp y--, read_loop
                             ; osr = 0000FFxx 
     out pins, 8             ; output the value
 

@@ -2,7 +2,7 @@
 #define __MMC2_H
 
 #define VSN_MAJ 3
-#define VSN_MIN 0
+#define VSN_MIN 1
 
 #define SECBUFFSIZE 512
 #define GLOBUFFSIZE 256
