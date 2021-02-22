@@ -9,37 +9,38 @@
 .define public PIN_NB400 15
 .define public PIN_1MHZ 4
 
-;    set y, 0b1000
-;    mov isr,y
-;    push
-
 .wrap_target
 main_loop:
     wait 0 PIN PIN_1MHZ
-    wait 0 PIN PIN_NB400 [4]
+    wait 0 PIN PIN_NB400
 
-    in PINS 16              ; latch address
     jmp pin read            ; jmp if PIN_R_NW
 
 write: // handle write, 6502 --> rp2040
-    wait 1 PIN PIN_1MHZ    ; wait for clock
+    in PINS 16              ; latch address
+    wait 1 PIN PIN_1MHZ     ; wait for clock
     wait 0 PIN PIN_1MHZ
 
-    in PINS 16              ; latch and push data
+    in PINS 16              ; latch data
     push noblock
     jmp main_loop [4]
 
 read: // handle read, rp2040 --> 6502 
-    in PINS 16              ; latch and push the address
+    in pins 4               ; latch address
+    mov y, isr
+    jmp !y, no_push         ; dont report reads to 0
+
+    in NULL 28              ; shift address bits
     push noblock
 
+no_push:
     wait 1 PIN PIN_1MHZ     ; wait for clock
 
-    set y,4                 ; flush the fifo
-read_loop:
+;    set y,4                 ; flush the fifo
+;read_loop:
     pull noblock            ; get the next word (or x if tx FIFO empty)
     mov x, osr              ; save to x
-    jmp y--, read_loop
+;    jmp y--, read_loop
                             ; osr = 0000FFxx 
     out pins, 8             ; output the value
 

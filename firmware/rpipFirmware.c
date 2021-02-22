@@ -16,6 +16,7 @@
 #include "pico/binary_info.h"
 #include "rpipFirmware.pio.h"
 #include "pico/sd_card.h"
+#include "hardware/watchdog.h"
 
 #include "ff.h"
 
@@ -55,7 +56,7 @@ static void initialiseIO()
     gpio_init(PIN_LED);
     gpio_init(PIN_NRST);
     gpio_set_dir(PIN_LED, GPIO_OUT);
-    for (int i = 0; i < 8; i++)
+    for (int i = 0; i <= 7; i++)
     {
         // PIO0 controls direction of D0-D7
         gpio_set_function(GPIO_FIRST + PIN_D0 + i, GPIO_FUNC_PIO0);
@@ -74,34 +75,10 @@ static uint write_data;
 static uint _read_address;
 static bool _was_write;
 
-static void dump_reg(uint reg)
-{
-    uint address = (reg >> PIN_A0) & 0xF;
-    uint data = (reg >> (16 + PIN_D0)) & 0xFF;
-    if (!(reg & (1u << PIN_R_NW)))
-    {
-        printf("WRITE address=%x data=%x %x\n", address, data, reg);
-    }
-    else
-    {
-        printf("READ  address=%x data=%x %x\n", address, data, reg);
-    }
-}
-
-volatile bool perform_reset = false;
-
 void __time_critical_func(process_pio)()
 {
     for (;;)
     {
-        if (perform_reset)
-        {
-            f_chdir("0:");
-            perform_reset = false;
-        }
-        _was_write = false;
-        // do
-        // {
         u_int32_t reg = pio_sm_get_blocking(pio, 0);
         if (!(reg & (1u << PIN_R_NW)))
         {
@@ -111,12 +88,10 @@ void __time_critical_func(process_pio)()
         }
         else
         {
+            _was_write = false;
             _read_address = (reg >> PIN_A0) & 0xF;
         }
-        if (_was_write || _read_address != 0)
-        {
-            at_process();
-        }
+        at_process();
     }
 }
 
@@ -151,19 +126,28 @@ void WriteEEPROM(unsigned char address, unsigned char val)
 
 void __time_critical_func(WriteDataPort)(int value)
 {
-    pio_sm_put_blocking(pio, 0, value | 0xFF00);
+    pio_sm_drain_tx_fifo(pio,0);
+    pio_sm_put(pio, 0, value | 0xFF00);
 };
 
 extern void snoop();
 
 void gpio_callback(uint gpio, uint32_t events)
 {
-    // Put the GPIO event(s) that just happened into event_str
-    // so we can print it
+    static bool watchdog_enabled = false;
     if (events & GPIO_IRQ_LEVEL_LOW)
     {
-        blink(1);
-        perform_reset = true;
+        if (watchdog_enabled)
+        {
+            watchdog_update();
+        }
+        else
+        {
+            pico_led(1);
+            watchdog_enable(1, 0);
+            //pio_sm_set_enabled(pio, 0, false);
+            watchdog_enabled = true;
+        }
     }
 }
 
@@ -172,20 +156,21 @@ int main()
     bi_decl(bi_program_description("Acorn Atom MMC/PL8 Interface" __DATE__ " " __TIME__));
     bi_decl(bi_1pin_with_name(PIN_LED, "On-board LED"));
     stdio_init_all();
+
     sd_init_1pin();
-    sd_set_clock_divider(12 / 1);
+    sd_set_clock_divider(12);
     sd_set_wide_bus(false);
 
     initialiseIO();
 
-    // pio->inte0 = PIO_IRQ0_INTE_SM0_RXNEMPTY_BITS;
-    // irq_set_exclusive_handler(PIO0_IRQ_0, irq_handler);
-    // irq_set_priority(PIO0_IRQ_0, 0x00);
-    // irq_set_enabled(PIO0_IRQ_0, true);
-
     gpio_set_irq_enabled_with_callback(PIN_NRST, GPIO_IRQ_LEVEL_LOW, true, &gpio_callback);
 
     printf("Acorn Atom MMC/PL8 Interface " __DATE__ " " __TIME__ "\n");
+    if (watchdog_caused_reboot())
+    {
+        printf("BREAK\n");
+    }
+    multicore_launch_core1(snoop);
 
     at_initprocessor();
 
@@ -193,7 +178,6 @@ int main()
     test_program_init(pio, 0, offset);
     pio_sm_set_enabled(pio, 0, true);
 
-    multicore_launch_core1(snoop);
 
     wait_reset();
     process_pio();

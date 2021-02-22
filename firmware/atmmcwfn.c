@@ -6,6 +6,7 @@
 #include "diskio.h"
 #include "ff.h"
 #include "wildcard.h"
+#include <stdio.h>
 
 #pragma udata fildata
 
@@ -255,6 +256,7 @@ void wfnRename(void)
 
 static BYTE fileOpen(BYTE mode)
 {
+    printf("OPEN %s\n", (const char*)globalData);
   int ret;
   if (filenum == 0) {
     // The scratch file is fixed, so we are backwards compatible with 2.9 firmware
