@@ -155,10 +155,14 @@ int main()
 {
     bi_decl(bi_program_description("Acorn Atom MMC/PL8 Interface" __DATE__ " " __TIME__));
     bi_decl(bi_1pin_with_name(PIN_LED, "On-board LED"));
+
+    uint sys_freq = 250000;
+    set_sys_clock_khz(sys_freq, true);
+
     stdio_init_all();
 
     sd_init_1pin();
-    sd_set_clock_divider(12);
+    sd_set_clock_divider(sys_freq / 10000); // 10MHz SPI Clock
     sd_set_wide_bus(false);
 
     initialiseIO();

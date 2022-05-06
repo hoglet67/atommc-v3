@@ -11,7 +11,7 @@
 
 .wrap_target
 main_loop:
-    wait 0 PIN PIN_1MHZ
+    wait 1 PIN PIN_NB400
     wait 0 PIN PIN_NB400
 
     jmp pin read            ; jmp if PIN_R_NW
