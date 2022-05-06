@@ -13,6 +13,7 @@
 #include "hardware/gpio.h"
 #include "hardware/pio.h"
 #include "hardware/irq.h"
+#include "hardware/vreg.h"
 #include "pico/binary_info.h"
 #include "rpipFirmware.pio.h"
 #include "pico/sd_card.h"
@@ -155,10 +156,18 @@ int main()
 {
     bi_decl(bi_program_description("Acorn Atom MMC/PL8 Interface" __DATE__ " " __TIME__));
     bi_decl(bi_1pin_with_name(PIN_LED, "On-board LED"));
+
+    uint sys_freq = 250000;
+    if (sys_freq > 250000)
+    {
+        vreg_set_voltage(VREG_VOLTAGE_1_25);
+    }
+    set_sys_clock_khz(sys_freq, true);
+
     stdio_init_all();
 
     sd_init_1pin();
-    sd_set_clock_divider(12);
+    sd_set_clock_divider(sys_freq / 10000); // 10MHz SPI Clock
     sd_set_wide_bus(false);
 
     initialiseIO();
@@ -174,10 +183,15 @@ int main()
 
     at_initprocessor();
 
-    uint offset = pio_add_program(pio, &test_program);
-    test_program_init(pio, 0, offset);
+    // Main state machine uses SM0
+    uint offset = pio_add_program(pio, &main_program);
+    main_program_init(pio, 0, offset);
     pio_sm_set_enabled(pio, 0, true);
 
+    // B4xx state machine uses SM2 (as snoop uses SM1)
+    uint offset2 = pio_add_program(pio, &b4xx_program);
+    b4xx_program_init(pio, 2, offset2);
+    pio_sm_set_enabled(pio, 2, true);
 
     wait_reset();
     process_pio();

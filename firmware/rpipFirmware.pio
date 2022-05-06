@@ -1,29 +1,47 @@
 /**
- * Copyright (c) 2021 Chris Moulang
+ * Original version Copyright (c) 2021 Chris Moulang
+ *
+ * Modifications Copyright (c) 2022 David Banks
  *
  * SPDX-License-Identifier: BSD-3-Clause
 */
 
-.program test
+; SYSCLK is currently 250MHz so delays are in units of 4ns
+
+; tAD is the delay in between the falling edge of Phi2 and nB400 being sampled
+;
+; this parameter is quite critical
+;
+; 80ns is tuned for the R65C02P4 @ 4MHz, it will need increasing for slower
+; parts that have longer clock->address output delays.
+
+.define tAD         20  ; 80ns
+
+; tDB is the delay between the rising edge of Phi2 and when to start sampling
+; for the falling edge. It's needed because Phi2 can suffer noise due to
+; crosstalk from the data bus being driven.
+;
+; this parameter is much less critical
+
+.define tDB         20  ; 80ns
 
 .define public PIN_NB400 15
 .define public PIN_1MHZ 4
 
+.program main
 .wrap_target
 main_loop:
-    wait 0 PIN PIN_1MHZ
-    wait 0 PIN PIN_NB400
+    wait 1 irq 0            ; wait for irq 0 and clear it
 
     jmp pin read            ; jmp if PIN_R_NW
 
 write: // handle write, 6502 --> rp2040
     in PINS 16              ; latch address
-    wait 1 PIN PIN_1MHZ     ; wait for clock
+    wait 1 PIN PIN_1MHZ [tDB]  ; wait for clock
     wait 0 PIN PIN_1MHZ
-
     in PINS 16              ; latch data
     push noblock
-    jmp main_loop [4]
+    jmp main_loop
 
 read: // handle read, rp2040 --> 6502 
     in pins 4               ; latch address
@@ -32,23 +50,34 @@ read: // handle read, rp2040 --> 6502
 
     in NULL 28              ; shift address bits
     push noblock
-
 no_push:
-    wait 1 PIN PIN_1MHZ     ; wait for clock
-
     pull noblock            ; get the next word (or x if tx FIFO empty)
     mov x, osr              ; save to x
                             ; osr = 0000FFxx 
     out pins, 8             ; output the value
 
-                            ; osr = 000000FF 
-    out pindirs, 8 [16]     ; Set data pin directions to out
+    wait 1 PIN PIN_1MHZ     ; wait for clock
 
+                            ; osr = 000000FF 
+    out pindirs, 8 [tDB]    ; Set data pin directions to out
 
     wait 0 PIN PIN_1MHZ     ; wait for clock
     
                             ; osr = 00000000
-    out pindirs, 8  [4]     ; Restore data pin directions to in
+    out pindirs, 8          ; Restore data pin directions to in
+.wrap
+
+
+.program b4xx
+.wrap_target
+public entry_point:
+idle:
+    wait 1 pin PIN_1MHZ [tDB]  ; wait for PHI2 to go high
+                               ; delay tDB to avoid noise
+    wait 0 pin PIN_1MHZ [tAD]  ; wait for PHI2 to go low
+                               ; delay tAD to sample nB400 when stable
+    jmp pin, idle              ; test nB400 part way through phase1 when it should be stable
+    irq set 0                  ; irq 0 indicates nB400 has definitely been asserted
 .wrap
 
 
@@ -60,12 +89,18 @@ const uint PIN_R_NW = 5;
 const uint PIN_D0 = 6;
 const uint PIN_A0 = 0;
 
-void test_program_init(PIO pio, uint sm, uint offset) {
-   pio_sm_config c = test_program_get_default_config(offset);
-   sm_config_set_jmp_pin 	(&c, GPIO_FIRST + PIN_R_NW);  	
+void main_program_init(PIO pio, uint sm, uint offset) {
+   pio_sm_config c = main_program_get_default_config(offset);
+   sm_config_set_jmp_pin 	(&c, GPIO_FIRST + PIN_R_NW);
    sm_config_set_in_pins(&c, GPIO_FIRST);
    sm_config_set_out_pins(&c, GPIO_FIRST + PIN_D0, 8);
-   //sm_config_set_in_shift(&c, true, true, 32);
+   pio_sm_init(pio, sm, offset, &c);
+}
+
+void b4xx_program_init(PIO pio, uint sm, uint offset) {
+   pio_sm_config c = b4xx_program_get_default_config(offset);
+   sm_config_set_jmp_pin 	(&c, GPIO_FIRST + PIN_NB400);
+   sm_config_set_in_pins(&c, GPIO_FIRST);
    pio_sm_init(pio, sm, offset, &c);
 }
 
